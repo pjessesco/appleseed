@@ -540,6 +540,8 @@ class MacPackageBuilder(PackageBuilder):
         self.copy_qt_framework("QtGui")
         self.copy_qt_resources("QtGui")
         self.copy_qt_framework("QtOpenGL")
+        self.copy_qt_framework("QtConcurrent")
+        self.copy_qt_framework("QtWidgets")
 
     def add_python_to_stage(self):
         progress("Mac-specific: Adding Python 2.7 to staging directory")
@@ -551,15 +553,15 @@ class MacPackageBuilder(PackageBuilder):
 
     def copy_qt_framework(self, framework_name):
         framework_dir = framework_name + ".framework"
-        src_filepath = os.path.join(self.settings.qt_runtime_path, framework_dir, "Versions", "4", framework_name)
-        dest_path = os.path.join("appleseed", "lib", framework_dir, "Versions", "4")
+        src_filepath = os.path.join(self.settings.qt_runtime_path, framework_dir, "Versions", "5", framework_name)
+        dest_path = os.path.join("appleseed", "lib", framework_dir, "Versions", "5")
         safe_make_directory(dest_path)
         shutil.copy(src_filepath, dest_path)
         make_writable(os.path.join(dest_path, framework_name))
 
     def copy_qt_resources(self, framework_name):
         framework_dir = framework_name + ".framework"
-        src_path = os.path.join(self.settings.qt_runtime_path, framework_dir, "Versions", "4", "Resources")
+        src_path = os.path.join(self.settings.qt_runtime_path, framework_dir, "Versions", "5", "Resources")
         dest_path = os.path.join("appleseed", "lib", framework_dir, "Resources")
         shutil.copytree(src_path, dest_path)
 
@@ -579,9 +581,11 @@ class MacPackageBuilder(PackageBuilder):
                     self.set_library_id(lib_path, filename)
 
     def set_qt_framework_ids(self):
-        self.set_library_id("appleseed/lib/QtCore.framework/Versions/4/QtCore", "QtCore.framework/Versions/4/QtCore")
-        self.set_library_id("appleseed/lib/QtGui.framework/Versions/4/QtGui", "QtGui.framework/Versions/4/QtGui")
-        self.set_library_id("appleseed/lib/QtOpenGL.framework/Versions/4/QtOpenGL", "QtOpenGL.framework/Versions/4/QtOpenGL")
+        self.set_library_id("appleseed/lib/QtCore.framework/Versions/5/QtCore", "QtCore.framework/Versions/5/QtCore")
+        self.set_library_id("appleseed/lib/QtGui.framework/Versions/5/QtGui", "QtGui.framework/Versions/5/QtGui")
+        self.set_library_id("appleseed/lib/QtOpenGL.framework/Versions/5/QtOpenGL", "QtOpenGL.framework/Versions/5/QtOpenGL")
+        self.set_library_id("appleseed/lib/QtConcurrent.framework/Versions/5/QtConcurrent", "QtConcurrent.framework/Versions/5/QtConcurrent")
+        self.set_library_id("appleseed/lib/QtWidgets.framework/Versions/5/QtWidgets", "QtWidgets.framework/Versions/5/QtWidgets")
 
     def change_library_paths_in_libraries(self):
         for dirpath, dirnames, filenames in os.walk("appleseed/lib"):
@@ -614,12 +618,14 @@ class MacPackageBuilder(PackageBuilder):
     def change_qt_framework_paths_in_binary(self, bin_path):
         for fwk_path in self.get_qt_frameworks_for_file(bin_path):
             fwk_name = re.search(r"(Qt.*)\.framework", fwk_path).group(1)
-            self.change_library_path(bin_path, fwk_path, "@executable_path/../lib/{0}.framework/Versions/4/{0}".format(fwk_name))
+            self.change_library_path(bin_path, fwk_path, "@executable_path/../lib/{0}.framework/Versions/5/{0}".format(fwk_name))
 
     def change_qt_framework_paths_in_qt_frameworks(self):
-        self.change_qt_framework_paths_in_binary("appleseed/lib/QtCore.framework/Versions/4/QtCore")
-        self.change_qt_framework_paths_in_binary("appleseed/lib/QtGui.framework/Versions/4/QtGui")
-        self.change_qt_framework_paths_in_binary("appleseed/lib/QtOpenGL.framework/Versions/4/QtOpenGL")
+        self.change_qt_framework_paths_in_binary("appleseed/lib/QtCore.framework/Versions/5/QtCore")
+        self.change_qt_framework_paths_in_binary("appleseed/lib/QtGui.framework/Versions/5/QtGui")
+        self.change_qt_framework_paths_in_binary("appleseed/lib/QtOpenGL.framework/Versions/5/QtOpenGL")
+        self.change_qt_framework_paths_in_binary("appleseed/lib/QtConcurrent.framework/Versions/5/QtConcurrent")
+        self.change_qt_framework_paths_in_binary("appleseed/lib/QtWidgets.framework/Versions/5/QtWidgets")
 
     def set_library_id(self, target, name):
         self.run('install_name_tool -id "{0}" {1}'.format(name, target))
