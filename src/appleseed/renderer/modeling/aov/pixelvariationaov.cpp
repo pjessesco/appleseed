@@ -76,8 +76,9 @@ namespace
         void post_process_image(const Frame& frame) override
         {
             const AABB2u& crop_window = frame.get_crop_window();
+
             ColorMap color_map;
-            color_map.set_palette_from_array(InfernoColorMap, countof(InfernoColorMap) / 3);
+            color_map.set_palette_from_array(InfernoColorMapLinearRGB, countof(InfernoColorMapLinearRGB) / 3);
 
             // Clamps the pixel variation in the red channel between 0 and 1.
             // No normalization happens here.

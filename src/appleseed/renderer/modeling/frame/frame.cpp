@@ -47,8 +47,10 @@
 #include "renderer/utility/paramarray.h"
 
 // appleseed.foundation headers.
+#include "foundation/core/exceptions/exceptionioerror.h"
 #include "foundation/image/analysis.h"
 #include "foundation/image/color.h"
+#include "foundation/image/conversion.h"
 #include "foundation/image/genericimagefilereader.h"
 #include "foundation/image/genericimagefilewriter.h"
 #include "foundation/image/genericprogressiveimagefilereader.h"
@@ -86,7 +88,6 @@ using namespace bcd;
 using namespace foundation;
 using namespace std;
 namespace bf = boost::filesystem;
-namespace bsys = boost::system;
 
 namespace renderer
 {
@@ -183,14 +184,24 @@ Frame::Frame(
     {
         RENDERER_LOG_DEBUG("loading reference image %s...", impl->m_ref_image_path.c_str());
 
-        GenericImageFileReader reader;
-        impl->m_ref_image.reset(reader.read(
-            search_paths.qualify(impl->m_ref_image_path).c_str()));
-
-        if (!has_valid_ref_image())
+        try
+        {
+            GenericImageFileReader reader;
+            impl->m_ref_image.reset(
+                reader.read(
+                    search_paths.qualify(impl->m_ref_image_path).c_str()));
+        }
+        catch (const ExceptionIOError&)
         {
             RENDERER_LOG_ERROR(
-                "the reference image is not compatible with the output frame (different dimensions).");
+                "failed to load reference image %s; continuing without a reference image.",
+                impl->m_ref_image_path.c_str());
+        }
+
+        if (impl->m_ref_image && !has_valid_ref_image())
+        {
+            RENDERER_LOG_ERROR(
+                "the reference image has different dimensions than the frame; continuing without a reference image");
         }
     }
 
@@ -332,7 +343,8 @@ Image* Frame::ref_image() const
 
 bool Frame::has_valid_ref_image() const
 {
-    return impl->m_ref_image &&
+    return
+        impl->m_ref_image &&
         are_images_compatible(*impl->m_image.get(), *impl->m_ref_image.get());
 }
 
@@ -527,13 +539,14 @@ void Frame::denoise(
 
 namespace
 {
-    inline size_t get_checkpoint_total_channel_count(const size_t aov_count)
+    size_t get_checkpoint_total_channel_count(const size_t aov_count)
     {
         // The beauty image plus the shading result framebuffer.
         return ShadingResultFrameBuffer::get_total_channel_count(aov_count) + 1;
     }
 
     typedef vector<tuple<string, CanvasProperties, ImageAttributes>> CheckpointProperties;
+
 
     //
     // Interface used to save the rendering buffer in checkpoints.
@@ -775,7 +788,6 @@ namespace
         if (!result)
             RENDERER_LOG_ERROR("could not save denoiser checkpoint.");
     }
-
 }
 
 bool Frame::load_checkpoint(IShadingResultFrameBufferFactory* buffer_factory)
@@ -991,7 +1003,6 @@ void Frame::save_checkpoint(
 
 namespace
 {
-
     void add_chromaticities_attributes(ImageAttributes& image_attributes)
     {
         // Scene-linear sRGB / Rec. 709 chromaticities.
@@ -1001,56 +1012,19 @@ namespace
         image_attributes.insert("blue_xy_chromaticity",  Vector2f(0.15f, 0.06f));
     }
 
-    void transform_to_srgb(Tile& tile)
-    {
-        assert(tile.get_channel_count() == 4);
-        assert(tile.get_pixel_format() == PixelFormatHalf);
+    //
+    // Default export formats:
+    //
+    // OpenEXR   .exr          4-channel   16-bit (half)                            Linear
+    // RGBE      .hdr          3-channel   32-bit (8-bit RGB + shared exponent)     Linear
+    // TIFF      .tiff/.tif    4-channel   16-bit (uint16)                          Linear
+    // BMP       .bmp          4-channel    8-bit (uint8)                             sRGB
+    // PNG       .png          4-channel    8-bit (uint8)                             sRGB
+    // JPEG      .jpg/.jpe/    3-channel    8-bit (uint8)                             sRGB
+    //           .jpeg/.jif/
+    //           .jfif/.jfi
+    //
 
-        typedef Color<half, 4> Color4h;
-
-        Color4h* pixel_ptr = reinterpret_cast<Color4h*>(tile.pixel(0));
-        Color4h* pixel_end = pixel_ptr + tile.get_pixel_count();
-
-        for (; pixel_ptr < pixel_end; ++pixel_ptr)
-        {
-            // Load the pixel color.
-            Color4f color(*pixel_ptr);
-
-            // Apply color space conversion and clamping.
-            color.unpremultiply_in_place();
-            color.rgb() = fast_linear_rgb_to_srgb(color.rgb());
-            color = saturate(color);
-            color.premultiply_in_place();
-
-            // Store the pixel color.
-            *pixel_ptr = color;
-        }
-    }
-
-    void transform_to_srgb(Image& image)
-    {
-        const CanvasProperties& image_props = image.properties();
-
-        for (size_t ty = 0; ty < image_props.m_tile_count_y; ++ty)
-        {
-            for (size_t tx = 0; tx < image_props.m_tile_count_x; ++tx)
-                transform_to_srgb(image.tile(tx, ty));
-        }
-    }
-
-    /*
-     * Default Export Format
-     * OpenEXR   .exr          4-channel   16-bit (half)       Linear
-     * RGBE      .hdr          3-channel   32-bit (8-bit * 3   Linear
-     *                                     + a shared 8-bit
-     *                                     exponent)
-     * TIFF      .tiff/.tif    4-channel   16-bit (uint16)     Linear
-     * BMP       .bmp          4-channel    8-bit (uint8)        sRGB
-     * PNG       .png          4-channel    8-bit (uint8)        sRGB
-     * JPEG      .jpg/.jpe/    3-channel    8-bit (uint8)        sRGB
-     *           .jpeg/.jif/
-     *           .jfif/.jfi
-     */
     bool write_image(
         const Frame&            frame,
         const char*             file_path,
@@ -1075,27 +1049,21 @@ namespace
 
         try
         {
-            const bool high_dynamic_range_format =
-                extension == ".exr"  ||
-                extension == ".tiff" ||
-                extension == ".tif"  ||
-                extension == ".hdr";
+            const bool is_linear_format = is_linear_image_file_format(bf_file_path);
 
-            std::unique_ptr<Image> transformed_image;
-            if (
-                !high_dynamic_range_format &&
-                image.properties().m_channel_count == 4)
+            unique_ptr<Image> transformed_image;
+            if (!is_linear_format && image.properties().m_channel_count == 4)
             {
                 transformed_image.reset(new Image(image));
-                transform_to_srgb(*transformed_image);
+                convert_linear_rgb_to_srgb(*transformed_image);
             }
             else if (extension == ".hdr")
             {
-                // .hdr file only support 3 channel
+                // HDR files only support 3 channel.
                 const size_t shuffle_table[4] = { 0, 1, 2, Pixel::SkipChannel };
                 transformed_image.reset(new Image(image, image.properties().m_pixel_format, shuffle_table));
             }
-            else if (high_dynamic_range_format)
+            else if (is_linear_format)
             {
                 transformed_image.reset(new Image(image));
             }
@@ -1107,30 +1075,19 @@ namespace
                 return false;
             }
 
-            if (high_dynamic_range_format)
-            {
-                image_attributes.insert("color_space", "linear");
-            }
-            else
-            {
-                image_attributes.insert("color_space", "sRGB");
-            }
+            image_attributes.insert("color_space",
+                is_linear_format ? "linear" : "sRGB");
 
             create_parent_directories(bf_file_path);
 
-            const std::string filename = bf_file_path.string();
-
+            const string filename = bf_file_path.string();
             GenericImageFileWriter writer(filename.c_str());
 
             writer.append_image(transformed_image.get());
-
             writer.set_image_attributes(image_attributes);
 
-            if (extension == ".tiff" ||
-                extension == ".tif")
-            {
+            if (extension == ".tiff" || extension == ".tif")
                 writer.set_image_output_format(PixelFormat::PixelFormatUInt16);
-            }
 
             writer.write();
         }
@@ -1283,7 +1240,7 @@ void Frame::write_main_and_aov_images_to_multipart_exr(const char* file_path) co
     add_chromaticities_attributes(image_attributes);
     image_attributes.insert("color_space", "linear");
 
-    std::vector<Image> images;
+    vector<Image> images;
 
     create_parent_directories(file_path);
 

@@ -30,12 +30,14 @@
 
 // appleseed.foundation headers.
 #include "foundation/image/color.h"
-#include "foundation/image/image.h"
 #include "foundation/math/aabb.h"
 
 // Standard headers.
 #include <cstddef>
 #include <vector>
+
+// Forward declarations.
+namespace foundation { class Image; }
 
 namespace foundation
 {
@@ -43,66 +45,40 @@ namespace foundation
 class ColorMap
 {
   public:
-  	static void find_min_max_red_channel(
-		Image&    		image,
-		const AABB2u&   crop_window,
-		float&          min_val,
-		float&          max_val);
+    static void find_min_max_red_channel(
+        Image&          image,
+        const AABB2u&   crop_window,
+        float&          min_value,
+        float&          max_value);
 
-	static void find_min_max_relative_luminance(
-		Image&				image,		
-		const AABB2u&    	crop_window,
-		float&  			min_luminance,
-		float&    			max_luminance);
+    static void find_min_max_relative_luminance(
+        Image&          image,
+        const AABB2u&   crop_window,
+        float&          min_luminance,
+        float&          max_luminance);
 
-    void set_palette_from_array(const float* values, const size_t entry_count);
+    void set_palette_from_array(
+        const float*    values,
+        const size_t    entry_count);
 
-	void set_palette_from_image_file(const Image& image);
+    void set_palette_from_image_file(const Image& image);
 
     void remap_red_channel(
-		Image&            image,
-		const AABB2u&     crop_window,
-		const float       min_val,
-		const float       max_val) const;
-    
-    void remap_relative_luminance(
-		Image& 					image,
-		const AABB2u&			crop_window,
-		const float 			min_luminance,
-		const float 			max_luminance) const;
+        Image&          image,
+        const AABB2u&   crop_window,
+        const float     min_val,
+        const float     max_val) const;
 
-	Color3f evaluate_palette(float x) const;
+    void remap_relative_luminance(
+        Image&          image,
+        const AABB2u&   crop_window,
+        const float     min_luminance,
+        const float     max_luminance) const;
+
+    Color3f evaluate_palette(float x) const;
 
   private:
-    template <typename Func>
-    static void for_each_pixel(
-		Image& 			image,
-		const AABB2u& 	crop_window,
-		const Func& 	func);
-
     std::vector<Color3f> m_palette;
 };
-
-//
-// ColorMap class implementation.
-//
-
-template <typename Func>
-void ColorMap::for_each_pixel(
-	Image& 			image,
-	const AABB2u& 	crop_window,
-	const Func& 	func)
-{
-	for (size_t y = crop_window.min.y; y <= crop_window.max.y; ++y)
-    {
-        for (size_t x = crop_window.min.x; x <= crop_window.max.x; ++x)
-        {
-			foundation::Color4f color;
-			image.get_pixel(x, y, color);
-			func(color);
-			image.set_pixel(x, y, color);
-        }
-    }
-}
 
 }   // namespace foundation

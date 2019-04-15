@@ -144,6 +144,8 @@ set (foundation_image_sources
     foundation/image/colormapdata.h
     foundation/image/colorspace.cpp
     foundation/image/colorspace.h
+    foundation/image/conversion.cpp
+    foundation/image/conversion.h
     foundation/image/drawing.cpp
     foundation/image/drawing.h
     foundation/image/exceptionunsupportedimageformat.h
@@ -219,6 +221,8 @@ set (foundation_math_intersection_sources
     foundation/math/intersection/frustumsegment.h
     foundation/math/intersection/planesegment.h
     foundation/math/intersection/rayaabb.h
+    foundation/math/intersection/raydisk.h
+    foundation/math/intersection/rayparallelogram.h
     foundation/math/intersection/rayplane.h
     foundation/math/intersection/raysphere.h
     foundation/math/intersection/raytrianglehh.h
@@ -1860,6 +1864,8 @@ set (renderer_modeling_object_sources
     renderer/modeling/object/curveobjectreader.h
     renderer/modeling/object/curveobjectwriter.cpp
     renderer/modeling/object/curveobjectwriter.h
+    renderer/modeling/object/diskobject.cpp
+    renderer/modeling/object/diskobject.h
     renderer/modeling/object/iobjectfactory.cpp
     renderer/modeling/object/iobjectfactory.h
     renderer/modeling/object/meshobject.cpp
@@ -1879,6 +1885,10 @@ set (renderer_modeling_object_sources
     renderer/modeling/object/objecttraits.h
     renderer/modeling/object/proceduralobject.cpp
     renderer/modeling/object/proceduralobject.h
+    renderer/modeling/object/rectangleobject.cpp
+    renderer/modeling/object/rectangleobject.h
+    renderer/modeling/object/sphereobject.cpp
+    renderer/modeling/object/sphereobject.h
     renderer/modeling/object/triangle.h
 )
 list (APPEND appleseed_sources
@@ -2204,19 +2214,19 @@ if (USE_FIND_PACKAGE_FOR_OSL)
 else ()
     add_custom_command (TARGET appleseed
         PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/osl-release/bin/oslinfo${exe_ext} ${PROJECT_SOURCE_DIR}/sandbox/bin/
+        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/osl-release/bin/oslinfo.exe ${PROJECT_SOURCE_DIR}/sandbox/bin/
     )
     add_custom_command (TARGET appleseed
         PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/maketx${exe_ext} ${PROJECT_SOURCE_DIR}/sandbox/bin/
+        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/maketx.exe ${PROJECT_SOURCE_DIR}/sandbox/bin/
     )
     add_custom_command (TARGET appleseed
         PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/oiiotool${exe_ext} ${PROJECT_SOURCE_DIR}/sandbox/bin/
+        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/oiiotool.exe ${PROJECT_SOURCE_DIR}/sandbox/bin/
     )
     add_custom_command (TARGET appleseed
         PRE_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/idiff${exe_ext} ${PROJECT_SOURCE_DIR}/sandbox/bin/
+        COMMAND ${CMAKE_COMMAND} -E copy ${APPLESEED_DEPS_STAGE_DIR}/oiio-release/bin/idiff.exe ${PROJECT_SOURCE_DIR}/sandbox/bin/
     )
 endif ()
 

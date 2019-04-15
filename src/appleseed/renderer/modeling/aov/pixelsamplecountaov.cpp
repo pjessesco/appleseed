@@ -76,9 +76,8 @@ const char* PixelSampleCountAOV::get_model() const
 
 void PixelSampleCountAOV::post_process_image(const Frame& frame)
 {
-    const AABB2u& crop_window = frame.get_crop_window();
     ColorMap color_map;
-    color_map.set_palette_from_array(InfernoColorMap, countof(InfernoColorMap) / 3);
+    color_map.set_palette_from_array(InfernoColorMapLinearRGB, countof(InfernoColorMapLinearRGB) / 3);
 
     //
     // At this point, the AOV is filled with real sample/pixel count values.
@@ -92,6 +91,8 @@ void PixelSampleCountAOV::post_process_image(const Frame& frame)
     // user's max sample/pixel count is 0 (infinite) then we use the actual
     // max sample/pixel count found in the image.
     //
+
+    const AABB2u& crop_window = frame.get_crop_window();
 
     float min_spp, max_spp;
     if (m_max_spp == 0)
