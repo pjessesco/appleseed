@@ -5,8 +5,7 @@
 //
 // This software is released under the MIT license.
 //
-// Copyright (c) 2010-2013 Francois Beaune, Jupiter Jazz Limited
-// Copyright (c) 2014-2018 Francois Beaune, The appleseedhq Organization
+// Copyright (c) 2019 Esteban Tovagliari, The appleseedhq Organization
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -27,66 +26,42 @@
 // THE SOFTWARE.
 //
 
-#pragma once
+// Interface header.
+#include "foundation/cuda/exception.h"
 
 // Standard headers.
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
+#include <string>
 
-namespace renderer
+using namespace std;
+
+namespace foundation
 {
 
-class VariationTracker
+//
+// ExceptionCUDAError class implementation.
+//
+
+ExceptionCUDAError::ExceptionCUDAError(CUresult error)
 {
-  public:
-    VariationTracker()
-      : m_size(0)
-      , m_mean(0.0f)
+    string err;
+    const char* error_string;
+
+    if (cuGetErrorString(error, &error_string) == CUDA_SUCCESS)
     {
-        reset_variation();
+        err += "CUDA error: ";
+        err += error_string;
+        err += ".";
     }
+    else
+        err += "Unknown CUDA error.";
 
-    void reset_variation()
-    {
-        m_min = +1.0e38f;
-        m_max = -1.0e38f;
-    }
+    set_what(err.c_str());
+}
 
-    void insert(const float value)
-    {
-        ++m_size;
+void check_cuda_error(const CUresult error)
+{
+    if (error != CUDA_SUCCESS)
+        throw ExceptionCUDAError(error);
+}
 
-        m_mean += (value - m_mean) / m_size;
-
-        m_min = std::min(m_min, m_mean);
-        m_max = std::max(m_max, m_mean);
-    }
-
-    size_t get_size() const
-    {
-        return m_size;
-    }
-
-    float get_mean() const
-    {
-        return m_mean;
-    }
-
-    float get_variation() const
-    {
-        if (m_size == 0)
-            return 0.0;
-
-        const float spread = m_max - m_min;
-        return std::abs(m_mean != 0.0f ? spread / m_mean : spread);
-    }
-
-  private:
-    size_t  m_size;
-    float   m_mean;
-    float   m_min;
-    float   m_max;
-};
-
-}   // namespace renderer
+}       // namespace foundation

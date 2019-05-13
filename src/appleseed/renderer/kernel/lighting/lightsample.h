@@ -30,7 +30,6 @@
 #pragma once
 
 // appleseed.renderer headers.
-#include "renderer/kernel/lighting/lighttree.h"
 #include "renderer/kernel/lighting/lighttypes.h"
 
 // appleseed.foundation headers.
@@ -98,7 +97,7 @@ class LightSample
 
     // Data for a light-emitting shape sample.
     const EmittingShape*        m_shape;
-    foundation::Vector2f        m_bary;                         // barycentric coordinates of the sample
+    foundation::Vector2f        m_param_coords;                 // parametric coordinates of the sample
     foundation::Vector3d        m_point;                        // world space position of the sample
     foundation::Vector3d        m_shading_normal;               // world space shading normal at the sample, unit-length
     foundation::Vector3d        m_geometric_normal;             // world space geometric normal at the sample, unit-length
@@ -167,6 +166,21 @@ inline LightSample::LightSample()
   : m_shape(nullptr)
   , m_light(nullptr)
 {
+}
+
+inline void LightSample::make_shading_point(
+    ShadingPoint&               shading_point,
+    const foundation::Vector3d& direction,
+    const Intersector&          intersector) const
+{
+    assert(m_shape && !m_light);
+
+    m_shape->make_shading_point(
+        shading_point,
+        m_point,
+        direction,
+        m_param_coords,
+        intersector);
 }
 
 }   // namespace renderer

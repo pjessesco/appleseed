@@ -29,6 +29,18 @@
 
 
 #--------------------------------------------------------------------------------------------------
+# Include directories.
+#--------------------------------------------------------------------------------------------------
+
+if (WITH_GPU)
+    include_directories(
+        ${CUDA_INCLUDE_DIRS}
+        ${OPTIX_INCLUDE_DIR}
+    )
+endif ()
+
+
+#--------------------------------------------------------------------------------------------------
 # Source files.
 #--------------------------------------------------------------------------------------------------
 
@@ -38,6 +50,7 @@ set (foundation_array_sources
     foundation/array/applyvisitor.h
     foundation/array/array.cpp
     foundation/array/array.h
+    foundation/array/arrayallocator.h
     foundation/array/arrayref.h
     foundation/array/arraytraits.h
     foundation/array/arrayview.h
@@ -82,6 +95,7 @@ source_group ("foundation\\core\\exceptions" FILES
 set (foundation_core_sources
     foundation/core/appleseed.cpp
     foundation/core/appleseed.h
+    foundation/core/buildoptions.h.in
     foundation/core/thirdparties.cpp
     foundation/core/thirdparties.h
     foundation/core/version.h.in
@@ -92,6 +106,21 @@ list (APPEND appleseed_sources
 source_group ("foundation\\core" FILES
     ${foundation_core_sources}
 )
+
+if (WITH_GPU)
+    set (foundation_cuda_sources
+        foundation/cuda/cudadevice.cpp
+        foundation/cuda/cudadevice.h
+        foundation/cuda/exception.cpp
+        foundation/cuda/exception.h
+    )
+    list (APPEND appleseed_sources
+        ${foundation_cuda_sources}
+    )
+    source_group ("foundation\\cuda" FILES
+        ${foundation_cuda_sources}
+    )
+endif()
 
 set (foundation_curve_sources
     foundation/curve/binarycurvefilereader.cpp
@@ -527,6 +556,7 @@ set (foundation_meta_tests_sources
     foundation/meta/tests/test_snprintf.cpp
     foundation/meta/tests/test_sphericalimportancesampler.cpp
     foundation/meta/tests/test_spline.cpp
+    foundation/meta/tests/test_stampedptr.cpp
     foundation/meta/tests/test_statistics.cpp
     foundation/meta/tests/test_stlallocatortestbed.cpp
     foundation/meta/tests/test_stopwatch.cpp
@@ -900,6 +930,7 @@ set (foundation_utility_sources
     foundation/utility/settings.h
     foundation/utility/siphash.cpp
     foundation/utility/siphash.h
+    foundation/utility/stampedptr.h
     foundation/utility/statistics.cpp
     foundation/utility/statistics.h
     foundation/utility/stopwatch.h
@@ -952,6 +983,7 @@ set (renderer_api_sources
     renderer/api/aov.h
     renderer/api/bsdf.h
     renderer/api/bssrdf.h
+    renderer/api/buildoptions.h
     renderer/api/camera.h
     renderer/api/color.h
     renderer/api/display.h
@@ -1144,13 +1176,13 @@ set (renderer_kernel_lighting_sources
     renderer/kernel/lighting/lightpathrecorder.h
     renderer/kernel/lighting/lightpathstream.cpp
     renderer/kernel/lighting/lightpathstream.h
-    renderer/kernel/lighting/lightsample.cpp
     renderer/kernel/lighting/lightsample.h
     renderer/kernel/lighting/lightsamplerbase.cpp
     renderer/kernel/lighting/lightsamplerbase.h
     renderer/kernel/lighting/lighttree.cpp
     renderer/kernel/lighting/lighttree.h
     renderer/kernel/lighting/lighttree_node.h
+    renderer/kernel/lighting/lighttypes.cpp
     renderer/kernel/lighting/lighttypes.h
     renderer/kernel/lighting/materialsamplers.cpp
     renderer/kernel/lighting/materialsamplers.h
@@ -1213,9 +1245,10 @@ set (renderer_kernel_rendering_final_sources
     renderer/kernel/rendering/final/adaptivetilerenderer.h
     renderer/kernel/rendering/final/pixelsampler.cpp
     renderer/kernel/rendering/final/pixelsampler.h
+    renderer/kernel/rendering/final/texturecontrolledpixelrenderer.cpp
+    renderer/kernel/rendering/final/texturecontrolledpixelrenderer.h
     renderer/kernel/rendering/final/uniformpixelrenderer.cpp
     renderer/kernel/rendering/final/uniformpixelrenderer.h
-    renderer/kernel/rendering/final/variationtracker.h
 )
 list (APPEND appleseed_sources
     ${renderer_kernel_rendering_final_sources}
@@ -1423,6 +1456,7 @@ set (renderer_meta_tests_sources
     renderer/meta/tests/test_pixelsampler.cpp
     renderer/meta/tests/test_projectfilereader.cpp
     renderer/meta/tests/test_projectfilewriter.cpp
+    renderer/meta/tests/test_rgbspectrum.cpp
     renderer/meta/tests/test_samplecounter.cpp
     renderer/meta/tests/test_samplecounthistory.cpp
     renderer/meta/tests/test_samplegeneratorjob.cpp
@@ -1434,7 +1468,6 @@ set (renderer_meta_tests_sources
     renderer/meta/tests/test_texturestore.cpp
     renderer/meta/tests/test_tracer.cpp
     renderer/meta/tests/test_transformsequence.cpp
-    renderer/meta/tests/test_variationtracker.cpp
     renderer/meta/tests/test_volume.cpp
 )
 list (APPEND appleseed_sources
@@ -2071,6 +2104,8 @@ set (renderer_utility_sources
     renderer/utility/iostreamop.h
     renderer/utility/messagecontext.cpp
     renderer/utility/messagecontext.h
+    renderer/utility/oiiomaketexture.cpp
+    renderer/utility/oiiomaketexture.h
     renderer/utility/paramarray.cpp
     renderer/utility/paramarray.h
     renderer/utility/plugin.cpp
@@ -2079,6 +2114,7 @@ set (renderer_utility_sources
     renderer/utility/pluginstore.h
     renderer/utility/projectpoints.cpp
     renderer/utility/projectpoints.h
+    renderer/utility/rgbspectrum.h
     renderer/utility/seexpr.h
     renderer/utility/settingsparsing.cpp
     renderer/utility/settingsparsing.h
@@ -2128,11 +2164,86 @@ set_source_files_properties (${appleseed_schema_files} PROPERTIES
 
 
 #--------------------------------------------------------------------------------------------------
+# CUDA compilation.
+#--------------------------------------------------------------------------------------------------
+
+if (WITH_GPU)
+
+    # Build lists of absolute paths to kernel header files.
+    foreach (cuda_header ${appleseed_cuda_headers})
+        list (APPEND abs_cuda_headers_sources ${PROJECT_SOURCE_DIR}/src/appleseed/${cuda_header})
+    endforeach ()
+
+    # Build the sandbox destination directory path.
+    set (kernels_dir "${PROJECT_SOURCE_DIR}/sandbox/kernels")
+
+    #
+    # Compile PTX into the sandbox.
+    #
+
+    foreach (ptx_source ${appleseed_ptx_sources})
+        # Build the .ptx destination file name.
+        get_filename_component (ptx_source_we ${ptx_source} NAME_WE)
+        set (ptx_filename ${ptx_source_we}.ptx)
+
+        add_custom_command (
+            OUTPUT ${kernels_dir}/${ptx_filename}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${kernels_dir}
+            COMMAND ${CUDA_NVCC_EXECUTABLE}
+                "-I${CUDA_INCLUDE_DIR} "
+                "-I${OPTIX_INCLUDE_DIR} "
+                "-I${PROJECT_SOURCE_DIR}/src/appleseed "
+                -m64 --std=c++11 -O3 --use_fast_math --expt-relaxed-constexpr
+                -ptx
+                -arch sm_30
+                ${PROJECT_SOURCE_DIR}/src/appleseed/${ptx_source}
+                -o ${kernels_dir}/${ptx_filename}
+            MAIN_DEPENDENCY ${PROJECT_SOURCE_DIR}/src/appleseed/${ptx_source}
+            DEPENDS ${abs_cuda_headers_sources}
+        )
+
+        list (APPEND appleseed_ptx_files ${kernels_dir}/${ptx_filename})
+    endforeach ()
+
+    #
+    # Compile CUDA kernels into the sandbox.
+    #
+
+    foreach (cuda_source ${appleseed_cuda_sources})
+        # Build the .cu destination file name.
+        get_filename_component (cuda_source_we ${cuda_source} NAME_WE)
+        set (fatbin_filename ${cuda_source_we}.fatbin)
+
+        add_custom_command (
+            OUTPUT ${kernels_dir}/${fatbin_filename}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${kernels_dir}
+            COMMAND ${CUDA_NVCC_EXECUTABLE}
+                "-I${CUDA_INCLUDE_DIR} "
+                "-I${PROJECT_SOURCE_DIR}/src/appleseed "
+                -m64 --std=c++11 -O3 --use_fast_math --expt-relaxed-constexpr
+                -fatbin
+                -gencode=arch=compute_30,code=sm_30
+                -gencode=arch=compute_50,code=sm_50
+                -gencode=arch=compute_60,code=sm_60
+                ${PROJECT_SOURCE_DIR}/src/appleseed/${cuda_source}
+                -o ${kernels_dir}/${fatbin_filename}
+            MAIN_DEPENDENCY ${PROJECT_SOURCE_DIR}/src/appleseed/${cuda_source}
+            DEPENDS ${abs_cuda_headers_sources}
+        )
+
+        list (APPEND appleseed_fatbin_files ${kernels_dir}/${fatbin_filename})
+    endforeach ()
+endif ()
+
+
+#--------------------------------------------------------------------------------------------------
 # Target.
 #--------------------------------------------------------------------------------------------------
 
 add_library (appleseed SHARED
     ${appleseed_sources}
+    ${appleseed_ptx_files}
+    ${appleseed_fatbin_files}
 )
 
 set_target_properties (appleseed PROPERTIES FOLDER "Core")
@@ -2161,13 +2272,11 @@ append_custom_preprocessor_definitions (appleseed
 #--------------------------------------------------------------------------------------------------
 
 link_against_platform (appleseed)
-link_against_libpng (appleseed)
 link_against_xercesc (appleseed)
-
 link_against_openexr (appleseed)
 link_against_zlib (appleseed)
 link_against_lz4 (appleseed)
-
+link_against_ocio (appleseed)
 link_against_oiio (appleseed)
 link_against_osl (appleseed)
 
@@ -2177,6 +2286,13 @@ endif ()
 
 if (WITH_DISNEY_MATERIAL)
     link_against_seexpr (appleseed)
+endif ()
+
+if (WITH_GPU)
+    target_link_libraries (appleseed
+        ${OPTIX_LIBRARIES}
+        ${CUDA_CUDA_LIBRARY}
+    )
 endif ()
 
 target_link_libraries (appleseed
@@ -2262,4 +2378,9 @@ else ()
     install (TARGETS appleseed
         DESTINATION lib
     )
+endif ()
+
+if (WITH_GPU)
+    install (FILES ${appleseed_ptx_files} DESTINATION kernels)
+    install (FILES ${appleseed_fatbin_files} DESTINATION kernels)
 endif ()

@@ -528,14 +528,12 @@ namespace
     {
         struct Params
         {
-            OSL::ustring    dist;
             OSL::Vec3       N;
             OSL::Vec3       T;
             OSL::Color3     surface_transmittance;
             OSL::Color3     reflection_tint;
             OSL::Color3     refraction_tint;
             float           roughness;
-            float           highlight_falloff;
             float           anisotropy;
             float           ior;
             OSL::Color3     volume_transmittance;
@@ -572,14 +570,12 @@ namespace
         {
             const OSL::ClosureParam params[] =
             {
-                CLOSURE_STRING_PARAM(Params, dist),
                 CLOSURE_VECTOR_PARAM(Params, N),
                 CLOSURE_VECTOR_PARAM(Params, T),
                 CLOSURE_COLOR_PARAM(Params, surface_transmittance),
                 CLOSURE_COLOR_PARAM(Params, reflection_tint),
                 CLOSURE_COLOR_PARAM(Params, refraction_tint),
                 CLOSURE_FLOAT_PARAM(Params, roughness),
-                CLOSURE_FLOAT_PARAM(Params, highlight_falloff),
                 CLOSURE_FLOAT_PARAM(Params, anisotropy),
                 CLOSURE_FLOAT_PARAM(Params, ior),
                 CLOSURE_COLOR_PARAM(Params, volume_transmittance),
@@ -589,13 +585,8 @@ namespace
             };
 
             shading_system.register_closure(name(), id(), params, &prepare_closure, nullptr);
-
             g_closure_convert_funs[id()] = &convert_closure;
-
             g_closure_get_modes_funs[id()] = &modes;
-            g_closure_get_modes_funs[GlassBeckmannID] = &modes;
-            g_closure_get_modes_funs[GlassGGXID] = &modes;
-            g_closure_get_modes_funs[GlassSTDID] = &modes;
         }
 
         static void convert_closure(
@@ -607,25 +598,9 @@ namespace
         {
             const Params* p = static_cast<const Params*>(osl_params);
 
-            GlassBSDFInputValues* values;
-            ClosureID cid;
-
-            if (p->dist == g_ggx_str)
-                cid = GlassGGXID;
-            else if (p->dist == g_beckmann_str)
-                cid = GlassBeckmannID;
-            else if (p->dist == g_std_str)
-                cid = GlassSTDID;
-            else
-            {
-                string msg("invalid microfacet distribution function: ");
-                msg += p->dist.c_str();
-                throw ExceptionOSLRuntimeError(msg.c_str());
-            }
-
-            values =
+            GlassBSDFInputValues* values =
                 composite_closure.add_closure<GlassBSDFInputValues>(
-                    cid,
+                    id(),
                     shading_basis,
                     weight,
                     p->N,
@@ -637,7 +612,6 @@ namespace
             values->m_reflection_tint.set(Color3f(p->reflection_tint), g_std_lighting_conditions, Spectrum::Reflectance);
             values->m_refraction_tint.set(Color3f(p->refraction_tint), g_std_lighting_conditions, Spectrum::Reflectance);
             values->m_roughness = max(p->roughness, 0.0001f);
-            values->m_highlight_falloff = saturate(p->highlight_falloff);
             values->m_anisotropy = clamp(p->anisotropy, -1.0f, 1.0f);
             values->m_ior = max(p->ior, 0.001f);
             values->m_volume_transmittance.set(Color3f(p->volume_transmittance), g_std_lighting_conditions, Spectrum::Reflectance);
@@ -651,11 +625,9 @@ namespace
     {
         struct Params
         {
-            OSL::ustring    dist;
             OSL::Vec3       N;
             OSL::Vec3       T;
             float           roughness;
-            float           highlight_falloff;
             float           anisotropy;
             float           ior;
             float           energy_compensation;
@@ -692,11 +664,9 @@ namespace
         {
             const OSL::ClosureParam params[] =
             {
-                CLOSURE_STRING_PARAM(Params, dist),
                 CLOSURE_VECTOR_PARAM(Params, N),
                 CLOSURE_VECTOR_PARAM(Params, T),
                 CLOSURE_FLOAT_PARAM(Params, roughness),
-                CLOSURE_FLOAT_PARAM(Params, highlight_falloff),
                 CLOSURE_FLOAT_PARAM(Params, anisotropy),
                 CLOSURE_FLOAT_PARAM(Params, ior),
                 CLOSURE_FLOAT_KEYPARAM(Params, energy_compensation, "energy_compensation"),
@@ -705,13 +675,8 @@ namespace
             };
 
             shading_system.register_closure(name(), id(), params, &prepare_closure, nullptr);
-
             g_closure_convert_funs[id()] = &convert_closure;
-
             g_closure_get_modes_funs[id()] = &modes;
-            g_closure_get_modes_funs[GlossyBeckmannID] = &modes;
-            g_closure_get_modes_funs[GlossyGGXID] = &modes;
-            g_closure_get_modes_funs[GlossySTDID] = &modes;
         }
 
         static void convert_closure(
@@ -723,85 +688,43 @@ namespace
         {
             const Params* p = static_cast<const Params*>(osl_params);
 
-            GlossyBRDFInputValues* values;
-            ClosureID cid;
-
             const float roughness = saturate(p->roughness);
             const float fresnel_weight = saturate(p->fresnel_weight);
 
-            const float highlight_falloff = saturate(p->highlight_falloff);
             const float ior = max(p->ior, 0.001f);
-            float w = luminance(weight);
 
-            if (p->dist == g_ggx_str)
-            {
-                cid = GlossyGGXID;
-                w *= sample_weight<GGXMDF>(roughness, ior, fresnel_weight);
-            }
-            else if (p->dist == g_beckmann_str)
-            {
-                cid = GlossyBeckmannID;
-                w *= sample_weight<BeckmannMDF>(roughness, ior, fresnel_weight);
-            }
-            else if (p->dist == g_std_str)
-            {
-                cid = GlossySTDID;
-                w *= sample_weight_std(roughness, highlight_falloff, ior, fresnel_weight);
-            }
-            else
-            {
-                string msg("invalid microfacet distribution function: ");
-                msg += p->dist.c_str();
-                throw ExceptionOSLRuntimeError(msg.c_str());
-            }
-
-            values =
+            GlossyBRDFInputValues* values =
                 composite_closure.add_closure<GlossyBRDFInputValues>(
-                    cid,
+                    id(),
                     shading_basis,
                     weight,
                     p->N,
                     p->T,
                     arena);
-            composite_closure.override_closure_scalar_weight(w);
+
+            composite_closure.override_closure_scalar_weight(
+                luminance(weight) * sample_weight(roughness, ior, fresnel_weight));
 
             values->m_reflectance.set(1.0f);
             values->m_reflectance_multiplier = 1.0f;
             values->m_roughness = roughness;
-            values->m_highlight_falloff = highlight_falloff;
             values->m_anisotropy = clamp(p->anisotropy, -1.0f, 1.0f);
             values->m_ior = ior;
             values->m_fresnel_weight = fresnel_weight;
             values->m_energy_compensation = saturate(p->energy_compensation);
         }
 
-        template <typename MDF>
         static float sample_weight(
-            const float roughness,
-            const float ior,
-            const float fresnel_weight)
+            const float                 roughness,
+            const float                 ior,
+            const float                 fresnel_weight)
         {
-            const float eavg = get_average_albedo(MDF(), roughness);
-            const float favg = lerp(
-                1.0f,
-                average_fresnel_reflectance_dielectric(ior),
-                fresnel_weight);
-            return eavg * favg;
-        }
-
-        static float sample_weight_std(
-            const float roughness,
-            const float highlight_falloff,
-            const float ior,
-            const float fresnel_weight)
-        {
-            const float eavg0 = get_average_albedo(GGXMDF(), roughness);
-            const float eavg1 = get_average_albedo(BeckmannMDF(), roughness);
-            const float eavg = lerp(eavg0, eavg1, highlight_falloff);
-            const float favg = lerp(
-                1.0f,
-                average_fresnel_reflectance_dielectric(ior),
-                fresnel_weight);
+            const float eavg = get_average_albedo(GGXMDF(), roughness);
+            const float favg =
+                lerp(
+                    1.0f,
+                    average_fresnel_reflectance_dielectric(ior),
+                    fresnel_weight);
             return eavg * favg;
         }
     };
@@ -879,13 +802,11 @@ namespace
     {
         struct Params
         {
-            OSL::ustring    dist;
             OSL::Vec3       N;
             OSL::Vec3       T;
             OSL::Color3     normal_reflectance;
             OSL::Color3     edge_tint;
             float           roughness;
-            float           highlight_falloff;
             float           anisotropy;
             float           energy_compensation;
         };
@@ -919,26 +840,19 @@ namespace
         {
             const OSL::ClosureParam params[] =
             {
-                CLOSURE_STRING_PARAM(Params, dist),
                 CLOSURE_VECTOR_PARAM(Params, N),
                 CLOSURE_VECTOR_PARAM(Params, T),
                 CLOSURE_COLOR_PARAM(Params, normal_reflectance),
                 CLOSURE_COLOR_PARAM(Params, edge_tint),
                 CLOSURE_FLOAT_PARAM(Params, roughness),
-                CLOSURE_FLOAT_PARAM(Params, highlight_falloff),
                 CLOSURE_FLOAT_PARAM(Params, anisotropy),
                 CLOSURE_FLOAT_KEYPARAM(Params, energy_compensation, "energy_compensation"),
                 CLOSURE_FINISH_PARAM(Params)
             };
 
             shading_system.register_closure(name(), id(), params, &prepare_closure, nullptr);
-
             g_closure_convert_funs[id()] = &convert_closure;
-
             g_closure_get_modes_funs[id()] = &modes;
-            g_closure_get_modes_funs[MetalBeckmannID] = &modes;
-            g_closure_get_modes_funs[MetalGGXID] = &modes;
-            g_closure_get_modes_funs[MetalSTDID] = &modes;
         }
 
         static void convert_closure(
@@ -950,25 +864,9 @@ namespace
         {
             const Params* p = static_cast<const Params*>(osl_params);
 
-            MetalBRDFInputValues* values;
-            ClosureID cid;
-
-            if (p->dist == g_ggx_str)
-                cid = MetalGGXID;
-            else if (p->dist == g_beckmann_str)
-                cid = MetalBeckmannID;
-            else if (p->dist == g_std_str)
-                cid = MetalSTDID;
-            else
-            {
-                string msg("invalid microfacet distribution function: ");
-                msg += p->dist.c_str();
-                throw ExceptionOSLRuntimeError(msg.c_str());
-            }
-
-            values =
+            MetalBRDFInputValues* values =
                 composite_closure.add_closure<MetalBRDFInputValues>(
-                    cid,
+                    id(),
                     shading_basis,
                     weight,
                     p->N,
@@ -979,7 +877,6 @@ namespace
             values->m_edge_tint.set(Color3f(p->edge_tint), g_std_lighting_conditions, Spectrum::Reflectance);
             values->m_reflectance_multiplier = 1.0f;
             values->m_roughness = max(p->roughness, 0.0f);
-            values->m_highlight_falloff = saturate(p->highlight_falloff);
             values->m_anisotropy = clamp(p->anisotropy, -1.0f, 1.0f);
             values->m_energy_compensation = saturate(p->energy_compensation);
         }
@@ -1121,12 +1018,10 @@ namespace
     {
         struct Params
         {
-            OSL::ustring    dist;
             OSL::Vec3       N;
             OSL::Color3     specular_reflectance;
             float           specular_reflectance_multiplier;
             float           roughness;
-            float           highlight_falloff;
             float           ior;
             OSL::Color3     diffuse_reflectance;
             float           diffuse_reflectance_multiplier;
@@ -1152,12 +1047,10 @@ namespace
         {
             const OSL::ClosureParam params[] =
             {
-                CLOSURE_STRING_PARAM(Params, dist),
                 CLOSURE_VECTOR_PARAM(Params, N),
                 CLOSURE_COLOR_PARAM(Params, specular_reflectance),
                 CLOSURE_FLOAT_PARAM(Params, specular_reflectance_multiplier),
                 CLOSURE_FLOAT_PARAM(Params, roughness),
-                CLOSURE_FLOAT_PARAM(Params, highlight_falloff),
                 CLOSURE_FLOAT_PARAM(Params, ior),
                 CLOSURE_COLOR_PARAM(Params, diffuse_reflectance),
                 CLOSURE_FLOAT_PARAM(Params, diffuse_reflectance_multiplier),
@@ -1166,14 +1059,8 @@ namespace
             };
 
             shading_system.register_closure(name(), id(), params, nullptr, nullptr);
-
             g_closure_convert_funs[id()] = &convert_closure;
-
             g_closure_get_modes_funs[id()] = &modes;
-            g_closure_get_modes_funs[PlasticBeckmannID] = &modes;
-            g_closure_get_modes_funs[PlasticGGXID] = &modes;
-            g_closure_get_modes_funs[PlasticGTR1ID] = &modes;
-            g_closure_get_modes_funs[PlasticSTDID] = &modes;
         }
 
         static void convert_closure(
@@ -1185,27 +1072,9 @@ namespace
         {
             const Params* p = static_cast<const Params*>(osl_params);
 
-            PlasticBRDFInputValues* values;
-            ClosureID cid;
-
-            if (p->dist == g_beckmann_str)
-                cid = PlasticBeckmannID;
-            else if (p->dist == g_ggx_str)
-                cid = PlasticGGXID;
-            else if (p->dist == g_gtr1_str)
-                cid = PlasticGTR1ID;
-            else if (p->dist == g_std_str)
-                cid = PlasticSTDID;
-            else
-            {
-                string msg("invalid microfacet distribution function: ");
-                msg += p->dist.c_str();
-                throw ExceptionOSLRuntimeError(msg.c_str());
-            }
-
-            values =
+            PlasticBRDFInputValues* values =
                 composite_closure.add_closure<PlasticBRDFInputValues>(
-                    cid,
+                    id(),
                     shading_basis,
                     weight,
                     p->N,
@@ -1215,7 +1084,6 @@ namespace
             Spectrum::Reflectance);
             values->m_specular_reflectance_multiplier = max(p->specular_reflectance_multiplier, 0.0f);
             values->m_roughness = clamp(p->roughness, 0.0001f, 1.0f);
-            values->m_highlight_falloff = saturate(p->highlight_falloff);
             values->m_ior = max(p->ior, 0.001f);
             values->m_diffuse_reflectance.set(Color3f(p->diffuse_reflectance), g_std_lighting_conditions,
             Spectrum::Reflectance);
@@ -1273,7 +1141,7 @@ namespace
 
             GlossyBRDFInputValues* values =
                 composite_closure.add_closure<GlossyBRDFInputValues>(
-                    GlossyBeckmannID,
+                    GlossyID,
                     shading_basis,
                     weight,
                     p->N,

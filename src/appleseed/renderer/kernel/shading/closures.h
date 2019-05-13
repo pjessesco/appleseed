@@ -76,26 +76,9 @@ enum ClosureID
 
     // Microfacet closures.
     GlassID,
-    GlassBeckmannID,
-    GlassGGXID,
-    GlassSTDID,
-    LastGlassClosure = GlassSTDID,
-
     GlossyID,
-    GlossyBeckmannID,
-    GlossyGGXID,
-    GlossySTDID,
-
     MetalID,
-    MetalBeckmannID,
-    MetalGGXID,
-    MetalSTDID,
-
     PlasticID,
-    PlasticBeckmannID,
-    PlasticGGXID,
-    PlasticGTR1ID,
-    PlasticSTDID,
 
     // BSSRDF closures.
     SubsurfaceID,

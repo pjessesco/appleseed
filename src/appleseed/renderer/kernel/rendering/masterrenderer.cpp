@@ -87,11 +87,6 @@ namespace renderer
 
 namespace
 {
-    string make_search_path_string(const SearchPaths& search_paths)
-    {
-        return search_paths.to_string_reversed(SearchPaths::osl_path_separator()).c_str();
-    }
-
     // An abort switch whose abort status is determined by a renderer::IRendererController.
     class RendererControllerAbortSwitch
       : public IAbortSwitch
@@ -437,10 +432,11 @@ struct MasterRenderer::Impl
         if (!initialize_osl_shading_system(texture_store, abort_switch) ||
             abort_switch.is_aborted())
         {
-            // todo: there is a bug here: if initialize_osl_shading_system() fails, we return
-            // the renderer controller's status which is most likely ContinueRendering, or so
-            // we start rendering again, in an infinite loop.
-            return m_renderer_controller->get_status();
+            // If it wasn't an abort, it was a failure.
+            return
+                abort_switch.is_aborted()
+                    ? m_renderer_controller->get_status()
+                    : IRendererController::AbortRendering;
         }
 
         // Let scene entities perform their pre-render actions. Don't proceed if that failed.
@@ -465,7 +461,7 @@ struct MasterRenderer::Impl
         if (!components.create())
             return IRendererController::AbortRendering;
 
-        // Print renderer component settings.
+        // Print renderer components settings.
         components.print_settings();
 
         // Report whether Embree is used or not.
@@ -501,6 +497,7 @@ struct MasterRenderer::Impl
         // Perform post-render actions.
         recorder.on_render_end(m_project);
 
+        // End light path recording.
         const CanvasProperties& props = m_project.get_frame()->image().properties();
         m_project.get_light_path_recorder().finalize(
             props.m_canvas_width,

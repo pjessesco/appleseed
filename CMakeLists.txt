@@ -129,6 +129,8 @@ option (WITH_PYTHON2_BINDINGS               "Build Python bindings for Python 2"
 option (WITH_PYTHON3_BINDINGS               "Build Python bindings for Python 3"                        OFF)
 option (WITH_DISNEY_MATERIAL                "Build Disney material"                                     OFF)
 option (WITH_EMBREE                         "Include support for Embree intersection backend"           OFF)
+option (WITH_GPU                            "Build GPU support"                                         OFF)
+option (WITH_SPECTRAL_SUPPORT               "Include support for spectral colors"                       ON)
 option (WITH_DOXYGEN                        "Generate API reference with Doxygen"                       ON)
 option (INSTALL_HEADERS                     "Install header files"                                      ON)
 option (INSTALL_TESTS                       "Install unit tests and benchmarks"                         ON)
@@ -141,7 +143,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     option (USE_FIND_PACKAGE_FOR_OCIO       "Use find_package() for OpenColorIO library"                OFF)
     option (USE_FIND_PACKAGE_FOR_OIIO       "Use find_package() for OpenImageIO library"                OFF)
     option (USE_FIND_PACKAGE_FOR_OSL        "Use find_package() for OpenShadingLanguage library"        OFF)
-    option (USE_FIND_PACKAGE_FOR_PNG        "Use find_package() for libpng library"                     OFF)
     option (USE_FIND_PACKAGE_FOR_SEEXPR     "Use find_package() for SeExpr library"                     OFF)
     option (USE_FIND_PACKAGE_FOR_XERCES     "Use find_package() for Xerces library"                     OFF)
     option (USE_FIND_PACKAGE_FOR_ZLIB       "Use find_package() for zlib library"                       OFF)
@@ -185,6 +186,11 @@ else ()
     # Unknown architecture: No SIMD.
 endif ()
 
+if (WITH_SPECTRAL_SUPPORT)
+    set (APPLESEED_WITH_SPECTRAL_SUPPORT ON)
+    add_definitions (-DAPPLESEED_WITH_SPECTRAL_SUPPORT)
+endif ()
+
 
 #--------------------------------------------------------------------------------------------------
 # Common settings.
@@ -215,8 +221,8 @@ endif ()
 #--------------------------------------------------------------------------------------------------
 
 set (appleseed_version_major    2)
-set (appleseed_version_minor    0)
-set (appleseed_version_patch    5)
+set (appleseed_version_minor    1)
+set (appleseed_version_patch    0)
 set (appleseed_version_maturity beta)
 
 configure_file (${PROJECT_SOURCE_DIR}/src/appleseed/foundation/core/version.h.in
@@ -252,6 +258,7 @@ link_directories (${Boost_LIBRARY_DIRS})
 #--------------------------------------------------------------------------------------------------
 
 if (WITH_EMBREE)
+    set (APPLESEED_WITH_EMBREE ON)
     add_definitions (-DAPPLESEED_WITH_EMBREE)
     if (USE_STATIC_EMBREE)
         add_definitions (-DEMBREE_STATIC_LIB)
@@ -259,6 +266,14 @@ if (WITH_EMBREE)
     if (USE_FIND_PACKAGE_FOR_EMBREE)
         find_package (Embree REQUIRED)
     endif ()
+endif ()
+
+if (WITH_GPU)
+    set (APPLESEED_WITH_GPU ON)
+    add_definitions (-DAPPLESEED_WITH_GPU)
+
+    find_package (CUDA 9.0 REQUIRED)
+    find_package (OptiX REQUIRED)
 endif ()
 
 if (USE_FIND_PACKAGE_FOR_EXR)
@@ -287,7 +302,7 @@ if (USE_FIND_PACKAGE_FOR_OIIO)
 endif ()
 
 if (USE_STATIC_OSL)
-    add_definitions (-DOSL_STATIC_LIBRARY)
+    add_definitions (-DOSL_STATIC_BUILD)
 endif ()
 if (USE_FIND_PACKAGE_FOR_OSL)
     find_package (OSL REQUIRED)
@@ -298,6 +313,7 @@ if (USE_FIND_PACKAGE_FOR_PNG)
 endif ()
 
 if (WITH_DISNEY_MATERIAL)
+    set (APPLESEED_WITH_DISNEY_MATERIAL ON)
     add_definitions (-DAPPLESEED_WITH_DISNEY_MATERIAL)
     if (USE_FIND_PACKAGE_FOR_SEEXPR)
         find_package (SeExpr REQUIRED)
@@ -377,12 +393,6 @@ else ()
     include_directories (${APPLESEED_DEPS_STAGE_DIR}/osl-debug/include)
 endif ()
 
-if (USE_FIND_PACKAGE_FOR_PNG)
-    include_directories (${PNG_INCLUDE_DIR})
-else ()
-    include_directories (${APPLESEED_DEPS_STAGE_DIR}/libpng-debug/include)
-endif ()
-
 if (WITH_DISNEY_MATERIAL)
     if (USE_FIND_PACKAGE_FOR_SEEXPR)
         include_directories (${SEEXPR_INCLUDE_DIRS})
@@ -434,6 +444,7 @@ endif ()
 # SIMD.
 if (is_x86)
     if (USE_AVX2)
+        set (APPLESEED_USE_AVX2 ON)
         set (preprocessor_definitions_common
             ${preprocessor_definitions_common}
             APPLESEED_USE_AVX2
@@ -441,6 +452,7 @@ if (is_x86)
         set (USE_AVX TRUE)
     endif ()
     if (USE_AVX)
+        set (APPLESEED_USE_AVX ON)
         set (preprocessor_definitions_common
             ${preprocessor_definitions_common}
             APPLESEED_USE_AVX
@@ -448,6 +460,7 @@ if (is_x86)
         set (USE_SSE42 TRUE)
     endif ()
     if (USE_SSE42)
+        set (APPLESEED_USE_SSE42 ON)
         set (preprocessor_definitions_common
             ${preprocessor_definitions_common}
             APPLESEED_USE_SSE42
@@ -455,6 +468,7 @@ if (is_x86)
         set (USE_SSE TRUE)
     endif ()
     if (USE_SSE)
+        set (APPLESEED_USE_SSE ON)
         set (preprocessor_definitions_common
             ${preprocessor_definitions_common}
             APPLESEED_USE_SSE
@@ -464,6 +478,7 @@ if (is_x86)
         endif ()
     endif ()
     if (USE_F16C)
+        set (APPLESEED_USE_FC16 ON)
         set (preprocessor_definitions_common
             ${preprocessor_definitions_common}
             APPLESEED_USE_F16C
@@ -536,6 +551,14 @@ macro (append_custom_preprocessor_definitions target first_definition)
         COMPILE_DEFINITIONS_PROFILE ${definitions}
     )
 endmacro ()
+
+
+#--------------------------------------------------------------------------------------------------
+# Auto-generate build options header.
+#--------------------------------------------------------------------------------------------------
+
+configure_file (${PROJECT_SOURCE_DIR}/src/appleseed/foundation/core/buildoptions.h.in
+                ${PROJECT_SOURCE_DIR}/src/appleseed/foundation/core/buildoptions.h)
 
 
 #--------------------------------------------------------------------------------------------------
@@ -651,7 +674,9 @@ if (WITH_PYTHON2_BINDINGS)
         set (PYTHON_MAJOR_VERSION "2")
         set (PYTHON_MINOR_VERSION "7")
     endif ()
+endif ()
 
+if (WITH_PYTHON2_BINDINGS OR WITH_PYTHON3_BINDINGS)
     add_subdirectory (src/appleseed.python)
 endif ()
 
