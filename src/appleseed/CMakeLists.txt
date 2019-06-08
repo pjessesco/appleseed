@@ -113,6 +113,10 @@ if (WITH_GPU)
         foundation/cuda/cudadevice.h
         foundation/cuda/exception.cpp
         foundation/cuda/exception.h
+        foundation/cuda/memory.cpp
+        foundation/cuda/memory.h
+        foundation/cuda/module.cpp
+        foundation/cuda/module.h
     )
     list (APPEND appleseed_sources
         ${foundation_cuda_sources}
@@ -120,7 +124,7 @@ if (WITH_GPU)
     source_group ("foundation\\cuda" FILES
         ${foundation_cuda_sources}
     )
-endif()
+endif ()
 
 set (foundation_curve_sources
     foundation/curve/binarycurvefilereader.cpp
@@ -311,6 +315,8 @@ set (foundation_math_sampling_sources
     foundation/math/sampling/qmcsamplingcontext.h
     foundation/math/sampling/rngsamplingcontext.h
     foundation/math/sampling/sphericalimportancesampler.h
+    foundation/math/sampling/sphericalrectanglesampler.h
+    foundation/math/sampling/sphericaltrianglesampler.h
 )
 list (APPEND appleseed_sources
     ${foundation_math_sampling_sources}
@@ -983,7 +989,6 @@ set (renderer_api_sources
     renderer/api/aov.h
     renderer/api/bsdf.h
     renderer/api/bssrdf.h
-    renderer/api/buildoptions.h
     renderer/api/camera.h
     renderer/api/color.h
     renderer/api/display.h
@@ -1011,7 +1016,6 @@ set (renderer_api_sources
     renderer/api/trace.h
     renderer/api/types.h
     renderer/api/utility.h
-    renderer/api/version.h
     renderer/api/volume.h
 )
 list (APPEND appleseed_sources
@@ -1019,6 +1023,32 @@ list (APPEND appleseed_sources
 )
 source_group ("renderer\\api" FILES
     ${renderer_api_sources}
+)
+
+set (renderer_device_sources
+    renderer/device/irendercontext.h
+    renderer/device/irenderdevice.h
+    renderer/device/renderdevicebase.cpp
+    renderer/device/renderdevicebase.h
+)
+list (APPEND appleseed_sources
+    ${renderer_device_sources}
+)
+source_group ("renderer\\device" FILES
+    ${renderer_device_sources}
+)
+
+set (renderer_device_cpu_sources
+    renderer/device/cpu/cpurendercontext.cpp
+    renderer/device/cpu/cpurendercontext.h
+    renderer/device/cpu/cpurenderdevice.cpp
+    renderer/device/cpu/cpurenderdevice.h
+)
+list (APPEND appleseed_sources
+    ${renderer_device_cpu_sources}
+)
+source_group ("renderer\\device\\cpu" FILES
+    ${renderer_device_cpu_sources}
 )
 
 set (renderer_global_sources
@@ -1325,6 +1355,8 @@ set (renderer_kernel_rendering_sources
     renderer/kernel/rendering/pixelrendererbase.h
     renderer/kernel/rendering/renderercomponents.cpp
     renderer/kernel/rendering/renderercomponents.h
+    renderer/kernel/rendering/renderercontrollercollection.cpp
+    renderer/kernel/rendering/renderercontrollercollection.h
     renderer/kernel/rendering/rendererservices.cpp
     renderer/kernel/rendering/rendererservices.h
     renderer/kernel/rendering/sample.h
@@ -1550,8 +1582,6 @@ set (renderer_modeling_bsdf_sources
     renderer/modeling/bsdf/disneybrdf.h
     renderer/modeling/bsdf/energycompensation.cpp
     renderer/modeling/bsdf/energycompensation.h
-    renderer/modeling/bsdf/energycompensationtables.cpp
-    renderer/modeling/bsdf/energycompensationtables.h
     renderer/modeling/bsdf/fresnel.h
     renderer/modeling/bsdf/glassbsdf.cpp
     renderer/modeling/bsdf/glassbsdf.h

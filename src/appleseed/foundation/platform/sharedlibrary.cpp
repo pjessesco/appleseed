@@ -96,7 +96,7 @@ namespace
     string get_last_error_message()
     {
 #ifdef _WIN32
-        return get_windows_last_error_message();
+        return get_last_windows_error_message();
 #else
         return dlerror();
 #endif
@@ -122,11 +122,7 @@ SharedLibrary::SharedLibrary(const char* path)
 #endif
 
     if (m_handle == nullptr)
-    {
-        throw ExceptionCannotLoadSharedLib(
-            path,
-            get_last_error_message().c_str());
-    }
+        throw ExceptionCannotLoadSharedLib(path, get_last_error_message().c_str());
 }
 
 SharedLibrary::~SharedLibrary()
@@ -147,11 +143,7 @@ void* SharedLibrary::get_symbol(const char* name, const bool no_throw) const
 #endif
 
     if (symbol == nullptr && !no_throw)
-    {
-        throw ExceptionSharedLibCannotGetSymbol(
-            name,
-            get_last_error_message().c_str());
-    }
+        throw ExceptionSharedLibCannotGetSymbol(name, get_last_error_message().c_str());
 
     return symbol;
 }

@@ -1,11 +1,10 @@
-
 //
 // This source file is part of appleseed.
 // Visit https://appleseedhq.net/ for additional information and resources.
 //
 // This software is released under the MIT license.
 //
-// Copyright (c) 2014-2018 Esteban Tovagliari, The appleseedhq Organization
+// Copyright (c) 2019 Gray Olson, The appleseedhq Organization
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +25,23 @@
 // THE SOFTWARE.
 //
 
-#pragma once
+#version 330
+#extension GL_ARB_separate_shader_objects : enable
 
-// API headers.
-#include "foundation/core/version.h"
+layout(location = 0) in vec3 a_pos;
+layout(location = 1) in vec3 a_norm;
+layout(location = 2) in mat4 i_model;
+
+uniform mat4 u_view;
+uniform mat4 u_proj;
+
+layout(location = 1) out vec3 v_world_pos;
+layout(location = 0) out vec3 v_norm;
+
+void main()
+{
+    vec4 world_pos = i_model * vec4(a_pos, 1.0);
+    v_world_pos = world_pos.xyz;
+    v_norm = a_norm;
+    gl_Position = u_proj * u_view * world_pos;
+}

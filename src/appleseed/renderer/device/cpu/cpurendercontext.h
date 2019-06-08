@@ -28,5 +28,15 @@
 
 #pragma once
 
-// API headers.
-#include "foundation/core/buildoptions.h"
+// appleseed.renderer headers.
+#include "renderer/device/irendercontext.h"
+
+namespace renderer
+{
+
+class CPURenderContext
+  : public IRenderContext
+{
+};
+
+}       // namespace renderer

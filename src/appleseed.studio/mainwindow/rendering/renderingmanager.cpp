@@ -89,8 +89,11 @@ namespace
 
       public:
         // Constructor.
-        explicit MasterRendererThread(MasterRenderer* master_renderer)
+        MasterRendererThread(
+            MasterRenderer&         master_renderer,
+            IRendererController&    renderer_controller)
           : m_master_renderer(master_renderer)
+          , m_renderer_controller(renderer_controller)
         {
         }
 
@@ -98,7 +101,8 @@ namespace
         void signal_rendering_failed();
 
       private:
-        MasterRenderer* m_master_renderer;
+        MasterRenderer&             m_master_renderer;
+        IRendererController&        m_renderer_controller;
 
         // The entry point for the thread.
         void run() override
@@ -108,7 +112,7 @@ namespace
             set_current_thread_name("master_renderer");
 
             const MasterRenderer::RenderingResult rendering_result =
-                m_master_renderer->render();
+                m_master_renderer.render(m_renderer_controller);
 
             if (rendering_result.m_status != MasterRenderer::RenderingResult::Succeeded)
                 emit signal_rendering_failed();
@@ -220,11 +224,12 @@ void RenderingManager::start_rendering(
             *m_project,
             m_params,
             m_resource_search_paths,
-            &m_renderer_controller,
             m_tile_callback_factory.get()));
 
     m_master_renderer_thread.reset(
-        new MasterRendererThread(m_master_renderer.get()));
+        new MasterRendererThread(
+            *m_master_renderer,
+            m_renderer_controller));
 
     connect(
         m_master_renderer_thread.get(), SIGNAL(signal_rendering_failed()),

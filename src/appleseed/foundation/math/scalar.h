@@ -37,6 +37,7 @@
 #include "foundation/platform/types.h"
 
 // Standard headers.
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -177,6 +178,14 @@ T cube(const T x);
 template <typename T>
 T rcp(const T x);
 
+// Return 1 / x or eps if the absolute value of x is less than eps.
+template <typename T>
+T safe_rcp(const T x, const T eps);
+
+// Return the square root of x or 0 if x is negative.
+template <typename T>
+T safe_sqrt(const T x);
+
 // Compile-time exponentiation of the form x^p where p >= 0.
 // Note: swapped template arguments to allow writing pow_int<3>(3.14).
 template <size_t P, typename T>
@@ -308,20 +317,13 @@ T inverse_lerp(const T a, const T b, const U x);
 // fit() remaps a variable x from the range [min_x, max_x] to the
 // range [min_y, max_y]. When x is outside the [min_x, max_x] range,
 // a linear extrapolation outside the [min_y, max_y] range is used.
-template <typename T>
-T fit(
-    const T x,
-    const T min_x,
-    const T max_x,
-    const T min_y,
-    const T max_y);
-template <typename U, typename V>
-V fit(
-    const U x,
-    const U min_x,
-    const U max_x,
-    const V min_y,
-    const V max_y);
+template <typename In, typename Out = In, typename Interpolant = Out>
+Out fit(
+    const In x,
+    const In min_x,
+    const In max_x,
+    const Out min_y,
+    const Out max_y);
 
 
 //
@@ -432,6 +434,18 @@ template <typename T>
 inline T rcp(const T x)
 {
     return T(1.0) / x;
+}
+
+template <typename T>
+inline T safe_rcp(const T x, const T eps)
+{
+    return std::abs(x) < eps ? eps : T(1.0) / x;
+}
+
+template <typename T>
+inline T safe_sqrt(const T x)
+{
+    return std::sqrt(std::max(x, T(0.0)));
 }
 
 template <typename T, size_t P>
@@ -926,38 +940,21 @@ template <typename T, typename U>
 inline T inverse_lerp(const T a, const T b, const U x)
 {
     assert(a != b);
-
     return (x - a) / (b - a);
 }
 
-template <typename T>
-inline T fit(
-    const T x,
-    const T min_x,
-    const T max_x,
-    const T min_y,
-    const T max_y)
+template <typename In, typename Out, typename Interpolant>
+inline Out fit(
+    const In x,
+    const In min_x,
+    const In max_x,
+    const Out min_y,
+    const Out max_y)
 {
     assert(min_x != max_x);
-
-    const T k = (x - min_x) / (max_x - min_x);
-
-    return min_y * (T(1.0) - k) + max_y * k;
-}
-
-template <typename U, typename V>
-inline V fit(
-    const U x,
-    const U min_x,
-    const U max_x,
-    const V min_y,
-    const V max_y)
-{
-    assert(min_x != max_x);
-
-    const V k = static_cast<V>(x - min_x) / (max_x - min_x);
-
-    return min_y * (V(1.0) - k) + max_y * k;
+    const Interpolant k = Interpolant(x - min_x) / Interpolant(max_x - min_x);
+    const Out result = min_y * (Interpolant(1.0) - k) + max_y * k;
+    return result;
 }
 
 
