@@ -1,0 +1,3 @@
+[submodule "ext/OpenShadingLanguage"]
+	path = ext/OpenShadingLanguage
+	url = https://github.com/imageworks/OpenShadingLanguage.git
